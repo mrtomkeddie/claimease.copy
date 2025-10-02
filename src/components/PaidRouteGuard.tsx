@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/contexts/UserContext';
-import { checkUserPaidStatus } from '@/lib/userProfile';
+import { checkUserPaidStatus } from '@/lib/supabase-auth';
 import { Loader2, Lock } from 'lucide-react';
 
 interface PaidRouteGuardProps {
@@ -28,7 +28,7 @@ export function PaidRouteGuard({ children, fallback }: PaidRouteGuardProps) {
       }
 
       try {
-        const paid = await checkUserPaidStatus(user.uid);
+        const paid = await checkUserPaidStatus(user.id);
         setIsPaid(paid);
         
         if (!paid) {

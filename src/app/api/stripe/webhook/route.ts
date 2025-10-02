@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { supabase } from '@/lib/supabaseClient';
+import { markUserAsPaid } from '@/lib/supabase-auth';
 import Stripe from 'stripe';
 
 // Initialize Stripe
@@ -79,33 +80,32 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       return;
     }
 
-    if (!adminDb) {
-      console.error('Firebase Admin not available');
+    if (!stripe) {
+      console.error('Stripe not initialized');
       return;
     }
 
-    // Get customer details
     const customer = await stripe.customers.retrieve(session.customer as string);
     const customerEmail = (customer as Stripe.Customer).email;
-    const customerName = (customer as Stripe.Customer).name;
 
-    // Update user profile in Firestore
-    const userRef = adminDb.collection('users').doc(userId);
-    
-    await userRef.update({
-      paid: true,
-      plan: plan,
-      stripeCustomerId: session.customer,
-      stripeSubscriptionId: session.subscription,
-      paidAt: new Date(),
-      updatedAt: new Date(),
-      // Update name if available from Stripe
-      ...(customerName && { name: customerName }),
-      // Clear pending plan
-      pendingPlan: null,
-    });
+    await markUserAsPaid(userId, plan as 'standard' | 'pro', session.customer as string);
 
-    // Log successful payment
+    const { error: paymentError } = await supabase
+      .from('payments')
+      .insert({
+        user_id: userId,
+        stripe_payment_intent_id: session.payment_intent as string,
+        stripe_session_id: session.id,
+        amount: session.amount_total || 0,
+        currency: session.currency || 'gbp',
+        plan: plan,
+        status: 'completed',
+      });
+
+    if (paymentError) {
+      console.error('Error recording payment:', paymentError);
+    }
+
     console.log(`User ${userId} (${customerEmail}) successfully subscribed to ${plan} plan`);
 
   } catch (error) {
@@ -117,25 +117,23 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
   try {
     const userId = subscription.metadata?.userId;
-    
+
     if (!userId) {
       console.error('Missing userId in subscription metadata');
       return;
     }
 
-    if (!adminDb) {
-      console.error('Firebase Admin not available');
-      return;
-    }
+    const { error } = await supabase
+      .from('users')
+      .update({
+        stripe_subscription_id: subscription.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
 
-    // Update subscription status
-    const userRef = adminDb.collection('users').doc(userId);
-    
-    await userRef.update({
-      stripeSubscriptionId: subscription.id,
-      subscriptionStatus: subscription.status,
-      updatedAt: new Date(),
-    });
+    if (error) {
+      console.error('Error updating subscription:', error);
+    }
 
     console.log(`Subscription updated for user ${userId}: ${subscription.status}`);
 
@@ -148,27 +146,25 @@ async function handleSubscriptionUpdated(subscription: Stripe.Subscription) {
 async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
   try {
     const userId = subscription.metadata?.userId;
-    
+
     if (!userId) {
       console.error('Missing userId in subscription metadata');
       return;
     }
 
-    if (!adminDb) {
-      console.error('Firebase Admin not available');
-      return;
-    }
+    const { error } = await supabase
+      .from('users')
+      .update({
+        paid_at: null,
+        tier: 'standard',
+        stripe_subscription_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', userId);
 
-    // Mark user as not paid
-    const userRef = adminDb.collection('users').doc(userId);
-    
-    await userRef.update({
-      paid: false,
-      plan: null,
-      subscriptionStatus: 'cancelled',
-      cancelledAt: new Date(),
-      updatedAt: new Date(),
-    });
+    if (error) {
+      console.error('Error cancelling subscription:', error);
+    }
 
     console.log(`Subscription cancelled for user ${userId}`);
 

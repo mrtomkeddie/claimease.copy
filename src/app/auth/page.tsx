@@ -6,21 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AlertCircle, Eye, EyeOff, Mail, Lock, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ClaimEaseLogo } from '@/components/ClaimEaseLogo';
-import { useUser } from '@/contexts/UserContext';
-import { auth } from '@/lib/firebase';
-import { fetchSignInMethodsForEmail, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, sendEmailVerification } from 'firebase/auth';
-import { createUserProfile, getUserProfile, setPendingPlan, checkUserPaidStatus } from '@/lib/userProfile';
+import { signUp, signIn, getUserProfile, setPendingPlan, checkUserPaidStatus } from '@/lib/supabase-auth';
+import { supabase } from '@/lib/supabaseClient';
 
 function AuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const { signIn, signUp } = useUser();
 
-  // Form states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -29,15 +25,13 @@ function AuthForm() {
   const [loading, setLoading] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
 
-  // UI state
   const [authStep, setAuthStep] = useState<'email' | 'login' | 'signup'>('email');
   const [plan, setPlan] = useState<string | null>(null);
 
-  // Prefill email from URL on mount and check for pre-registration
   useEffect(() => {
     const urlEmail = searchParams.get('email');
     const urlPlan = searchParams.get('plan');
-    
+
     if (urlEmail) {
       setEmail(urlEmail);
     }
@@ -45,30 +39,26 @@ function AuthForm() {
       setPlan(urlPlan);
     }
 
-    // Check for selected plan from localStorage (from plans page)
     const storedPlan = localStorage.getItem('selectedPlan');
     if (storedPlan && !urlPlan) {
       setPlan(storedPlan);
     }
   }, [searchParams]);
 
-  // Check for pre-registration data
-  const checkPreRegistration = async (email: string) => {
+  const checkEmailExists = async (email: string): Promise<boolean> => {
     try {
-      const response = await fetch(`/api/pre-reg?email=${encodeURIComponent(email)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data && !data.data.used) {
-          return data.data.plan;
-        }
-      }
+      const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+
+      return data !== null;
     } catch (error) {
-      console.warn('Failed to check pre-registration:', error);
+      return false;
     }
-    return null;
   };
 
-  // Check if user exists when email is submitted
   const handleContinue = async () => {
     if (!email.trim()) {
       toast({
@@ -79,21 +69,13 @@ function AuthForm() {
     }
 
     setCheckingEmail(true);
-    
-    try {
-      // Check for pre-registration data first
-      const preRegPlan = await checkPreRegistration(email);
-      if (preRegPlan && !plan) {
-        setPlan(preRegPlan);
-      }
 
-      const methods = await fetchSignInMethodsForEmail(auth, email);
-      
-      if (methods.length > 0 && methods.includes('password')) {
-        // Existing user - show login form
+    try {
+      const exists = await checkEmailExists(email);
+
+      if (exists) {
         setAuthStep('login');
       } else {
-        // New user - show signup form
         setAuthStep('signup');
       }
     } catch (error) {
@@ -107,7 +89,6 @@ function AuthForm() {
     }
   };
 
-  // Handle login
   const handleSignIn = async () => {
     if (!password) {
       toast({
@@ -118,57 +99,37 @@ function AuthForm() {
     }
 
     setLoading(true);
-    
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Check if user has paid
-      const isPaid = await checkUserPaidStatus(user.uid);
-      
+      const { user } = await signIn(email, password);
+
+      const isPaid = await checkUserPaidStatus(user.id);
+
       if (isPaid) {
-        // Paid user - go to dashboard
         router.push('/dashboard');
       } else {
-        // Unpaid user - route based on plan
         if (plan) {
-          await setPendingPlan(user.uid, plan as 'standard' | 'pro');
+          await setPendingPlan(user.id, plan as 'standard' | 'pro');
           router.push(`/checkout?plan=${encodeURIComponent(plan)}`);
         } else {
-          // Check if user has a pending plan
-          const userProfile = await getUserProfile(user.uid);
-          if (userProfile?.pendingPlan) {
-            router.push(`/checkout?plan=${userProfile.pendingPlan}`);
+          const userProfile = await getUserProfile(user.id);
+          if (userProfile?.pending_plan) {
+            router.push(`/checkout?plan=${userProfile.pending_plan}`);
           } else {
             router.push('/plans');
           }
         }
       }
     } catch (error: any) {
-      if (error.code === 'auth/wrong-password') {
-        toast({
-          title: 'Wrong password. Try again or reset.',
-          variant: 'destructive',
-        });
-      } else if (error.code === 'auth/user-not-found') {
-        // Edge case: user was deleted, show signup
-        setAuthStep('signup');
-        toast({
-          title: 'Account not found. Please create an account.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Sign-in failed. Please try again.',
-          variant: 'destructive',
-        });
-      }
+      toast({
+        title: 'Sign-in failed. Please check your credentials.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle signup
   const handleSignUp = async () => {
     if (!password || !confirmPassword) {
       toast({
@@ -195,56 +156,21 @@ function AuthForm() {
     }
 
     setLoading(true);
-    
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      // Save pre-registration data if user has a plan selected
+      const { user } = await signUp(email, password);
+
       if (plan) {
-        try {
-          await fetch('/api/pre-reg', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              email: email,
-              plan: plan
-            }),
-          });
-        } catch (preRegError) {
-          console.warn('Failed to save pre-registration:', preRegError);
-        }
-      }
-      
-      // Create user profile
-      await createUserProfile(user.uid, email, plan || undefined);
-      
-      // Send verification email (optional, doesn't block flow)
-      try {
-        await sendEmailVerification(user);
-      } catch (verifyError) {
-        console.warn('Failed to send verification email:', verifyError);
-      }
-      
-      // Navigate based on plan
-      if (plan) {
+        await setPendingPlan(user.id, plan as 'standard' | 'pro');
         router.push(`/checkout?plan=${encodeURIComponent(plan)}`);
       } else {
         router.push('/plans');
       }
     } catch (error: any) {
-      if (error.code === 'auth/email-already-in-use') {
-        // Switch to login
+      if (error.message.includes('already registered')) {
         setAuthStep('login');
         toast({
           title: 'Email already exists. Please sign in.',
-          variant: 'destructive',
-        });
-      } else if (error.code === 'auth/weak-password') {
-        toast({
-          title: 'Please choose a longer password (8+ characters).',
           variant: 'destructive',
         });
       } else {
@@ -258,7 +184,6 @@ function AuthForm() {
     }
   };
 
-  // Handle password reset
   const handleForgotPassword = async () => {
     if (!email.trim()) {
       toast({
@@ -269,7 +194,12 @@ function AuthForm() {
     }
 
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+
+      if (error) throw error;
+
       toast({
         title: 'Password reset sent. Check your inbox.',
         variant: 'default',
@@ -282,7 +212,6 @@ function AuthForm() {
     }
   };
 
-  // Render email step
   const renderEmailStep = () => (
     <form onSubmit={(e) => { e.preventDefault(); handleContinue(); }} className="space-y-4">
       <div className="space-y-2">
@@ -300,8 +229,8 @@ function AuthForm() {
           />
         </div>
       </div>
-      
-      <Button 
+
+      <Button
         type="submit"
         className="w-full btn-brand"
         disabled={checkingEmail}
@@ -311,7 +240,6 @@ function AuthForm() {
     </form>
   );
 
-  // Render login step
   const renderLoginStep = () => (
     <form onSubmit={(e) => { e.preventDefault(); handleSignIn(); }} className="space-y-4">
       <div className="space-y-2">
@@ -367,7 +295,7 @@ function AuthForm() {
         </button>
       </div>
 
-      <Button 
+      <Button
         type="submit"
         className="w-full btn-brand"
         disabled={loading}
@@ -389,7 +317,7 @@ function AuthForm() {
           className="bg-secondary border-border text-muted-foreground"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="new-password" className="text-foreground">Create Password</Label>
         <Input
@@ -403,7 +331,7 @@ function AuthForm() {
           className="bg-secondary border-border text-foreground placeholder-muted-foreground focus:ring-primary focus:border-primary"
         />
       </div>
-      
+
       <div className="space-y-2">
         <Label htmlFor="confirm-password" className="text-foreground">Confirm Password</Label>
         <Input
@@ -417,7 +345,7 @@ function AuthForm() {
           className="bg-secondary border-border text-foreground placeholder-muted-foreground focus:ring-primary focus:border-primary"
         />
       </div>
-      
+
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -427,7 +355,7 @@ function AuthForm() {
           ← Use a different email
         </button>
       </div>
-      
+
       <Button
         type="submit"
         className="w-full btn-brand"
@@ -442,12 +370,11 @@ function AuthForm() {
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-primary/20 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl">
         <div className="grid lg:grid-cols-2 gap-8 items-center">
-          {/* Left side - Brand/Welcome */}
           <div className="space-y-6 text-center lg:text-left">
             <div className="flex justify-center lg:justify-start">
               <ClaimEaseLogo className="h-12 w-auto text-white" />
             </div>
-            
+
             <div className="space-y-4">
               <h1 className="text-4xl lg:text-5xl font-bold text-foreground">
                 Welcome to ClaimEase
@@ -473,7 +400,6 @@ function AuthForm() {
             </div>
           </div>
 
-          {/* Right side - Auth Form */}
           <div>
             <Card className="backdrop-blur-sm bg-card/90 border-border shadow-2xl">
               <CardHeader className="space-y-1 text-center">
@@ -504,7 +430,7 @@ function AuthForm() {
 export default function AuthPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-background via-secondary to-primary/20 flex items-center justify-center p-4">
         <div className="w-full max-w-6xl">
           <div className="grid lg:grid-cols-2 gap-8 items-center">
             <div className="space-y-6 text-center lg:text-left">

@@ -2,9 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { UserTier, UserTierType, CLAIM_LIMITS } from '@/lib/constants';
-import { useFirebaseAuth } from '@/hooks/useFirebaseAuth';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { supabase } from '@/lib/supabaseClient';
+import { getUserProfile, updateUserProfile, signIn as supabaseSignIn, signUp as supabaseSignUp, signOut as supabaseSignOut } from '@/lib/supabase-auth';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 export interface User {
   id: string;
@@ -35,16 +35,65 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const { firebaseUser, loading, error, signIn: firebaseSignIn, signUp: firebaseSignUp, signOut: firebaseSignOut } = useFirebaseAuth();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (firebaseUser) {
-      // User is authenticated with Firebase, but we need to sync with our local user state
-      // This will be handled by the signIn/signUp functions
-    } else {
-      setUser(null);
-    }
-  }, [firebaseUser]);
+    const initializeUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (session?.user) {
+          const profile = await getUserProfile(session.user.id);
+          if (profile) {
+            setUser({
+              id: profile.id,
+              name: profile.name || '',
+              email: profile.email,
+              timezone: 'UTC',
+              pip_focus: [],
+              created_at: profile.created_at,
+              tier: profile.tier,
+              claims_used: profile.claims_used,
+              claims_remaining: profile.claims_remaining,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing user:', err);
+        setError('Failed to initialize user');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const profile = await getUserProfile(session.user.id);
+        if (profile) {
+          setUser({
+            id: profile.id,
+            name: profile.name || '',
+            email: profile.email,
+            timezone: 'UTC',
+            pip_focus: [],
+            created_at: profile.created_at,
+            tier: profile.tier,
+            claims_used: profile.claims_used,
+            claims_remaining: profile.claims_remaining,
+          });
+        }
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const canCreateClaim = (): boolean => {
     if (!user) return false;
@@ -54,10 +103,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const incrementClaimCount = async (): Promise<void> => {
     if (!user) return;
-    
+
     const newClaimsUsed = user.claims_used + 1;
-    const newClaimsRemaining = user.tier === UserTier.PRO 
-      ? -1 
+    const newClaimsRemaining = user.tier === UserTier.PRO
+      ? -1
       : Math.max(0, CLAIM_LIMITS[user.tier] - newClaimsUsed);
 
     const updatedUser = {
@@ -68,17 +117,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     setUser(updatedUser);
 
-    // Update in Firestore
-    if (user.id) {
-      try {
-        await updateDoc(doc(db, 'users', user.id), {
-          claims_used: newClaimsUsed,
-          claims_remaining: newClaimsRemaining,
-          updated_at: new Date()
-        });
-      } catch (error) {
-        console.error('Error updating claim count:', error);
-      }
+    try {
+      await updateUserProfile(user.id, {
+        claims_used: newClaimsUsed,
+        claims_remaining: newClaimsRemaining,
+      });
+    } catch (error) {
+      console.error('Error updating claim count:', error);
     }
   };
 
@@ -89,28 +134,79 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string): Promise<User> => {
-    const userData = await firebaseSignIn(email, password);
-    setUser(userData);
-    return userData;
+    try {
+      const { user: authUser } = await supabaseSignIn(email, password);
+      const profile = await getUserProfile(authUser.id);
+
+      if (!profile) {
+        throw new Error('User profile not found');
+      }
+
+      const userData: User = {
+        id: profile.id,
+        name: profile.name || '',
+        email: profile.email,
+        timezone: 'UTC',
+        pip_focus: [],
+        created_at: profile.created_at,
+        tier: profile.tier,
+        claims_used: profile.claims_used,
+        claims_remaining: profile.claims_remaining,
+      };
+
+      setUser(userData);
+      return userData;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
   };
 
   const signUp = async (email: string, password: string, name: string, tier: UserTierType = UserTier.STANDARD): Promise<User> => {
-    const userData = await firebaseSignUp(email, password, name, tier);
-    setUser(userData);
-    return userData;
+    try {
+      const { user: authUser } = await supabaseSignUp(email, password, name);
+      const profile = await getUserProfile(authUser.id);
+
+      if (!profile) {
+        throw new Error('User profile not found');
+      }
+
+      const userData: User = {
+        id: profile.id,
+        name: profile.name || '',
+        email: profile.email,
+        timezone: 'UTC',
+        pip_focus: [],
+        created_at: profile.created_at,
+        tier: profile.tier,
+        claims_used: profile.claims_used,
+        claims_remaining: profile.claims_remaining,
+      };
+
+      setUser(userData);
+      return userData;
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
   };
 
   const signOut = async (): Promise<void> => {
-    await firebaseSignOut();
-    setUser(null);
+    try {
+      await supabaseSignOut();
+      setUser(null);
+    } catch (err: any) {
+      setError(err.message);
+      throw err;
+    }
   };
 
   return (
-    <UserContext.Provider value={{ 
-      user, 
-      setUser, 
-      canCreateClaim, 
-      incrementClaimCount, 
+    <UserContext.Provider value={{
+      user,
+      setUser,
+      canCreateClaim,
+      incrementClaimCount,
       getRemainingClaims,
       loading,
       error,

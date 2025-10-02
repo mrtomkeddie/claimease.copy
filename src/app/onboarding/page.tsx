@@ -1,7 +1,16 @@
+'use client';
+
 import { PaidRouteGuard } from '@/components/PaidRouteGuard';
 import { Onboarding } from '@/components/onboarding';
+import { useRouter } from 'next/navigation';
 
 export default function OnboardingPage() {
+  const router = useRouter();
+
+  const handleComplete = () => {
+    router.push('/dashboard');
+  };
+
   return (
     <PaidRouteGuard>
       <div className="min-h-screen bg-background">
@@ -15,7 +24,7 @@ export default function OnboardingPage() {
                 Complete your profile to get started with ClaimEase
               </p>
             </div>
-            <Onboarding onComplete={() => {}} />
+            <Onboarding onComplete={handleComplete} />
           </div>
         </div>
       </div>

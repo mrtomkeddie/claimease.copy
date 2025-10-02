@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@/contexts/UserContext';
-import { getUserProfile, getUserPlan } from '@/lib/userProfile';
-import { UserProfile } from '@/lib/userProfile';
+import { getUserProfile, getUserPlan } from '@/lib/supabase-auth';
+import { UserProfile } from '@/lib/supabase-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

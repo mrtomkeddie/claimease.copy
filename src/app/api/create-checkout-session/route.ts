@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuth } from 'firebase-admin/auth';
-import { adminDb } from '@/lib/firebase-admin';
+import { supabase } from '@/lib/supabaseClient';
+import { getUserProfile, updateUserProfile } from '@/lib/supabase-auth';
 import Stripe from 'stripe';
-import { getAuth as getClientAuth } from 'firebase/auth';
 
 // Initialize Stripe
 let stripe: Stripe | null = null;
@@ -52,67 +51,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the user is authenticated
-    try {
-      let user;
-      if (adminDb) {
-        // Use Firebase Admin if available
-        user = await getAuth().getUser(userId);
-      } else {
-        // Fallback to client SDK for development
-        // In a real app, you'd want to verify the ID token
-        return NextResponse.json(
-          { error: 'Admin SDK not available' },
-          { status: 503 }
-        );
-      }
-      
-      if (!user || user.email !== email) {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-    } catch (error) {
+    const userProfile = await getUserProfile(userId);
+
+    if (!userProfile || userProfile.email !== email) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
       );
     }
 
-    // Check if user already has a Stripe customer ID
-    let customerId;
-    
-    if (adminDb) {
-      const userDoc = await adminDb.collection('users').doc(userId).get();
-      const userData = userDoc.data();
-      customerId = userData?.stripeCustomerId;
+    let customerId = userProfile.stripe_customer_id;
 
-      // Create Stripe customer if they don't exist
-      if (!customerId) {
-        const customer = await stripe.customers.create({
-          email: email,
-          metadata: {
-            firebaseUid: userId,
-          },
-        });
-        customerId = customer.id;
-
-        // Save customer ID to user profile
-        await adminDb.collection('users').doc(userId).update({
-          stripeCustomerId: customerId,
-          updatedAt: new Date(),
-        });
-      }
-    } else {
-      // If admin SDK not available, create customer without saving to Firestore
+    if (!customerId) {
       const customer = await stripe.customers.create({
         email: email,
         metadata: {
-          firebaseUid: userId,
+          userId: userId,
         },
       });
       customerId = customer.id;
+
+      await updateUserProfile(userId, {
+        stripe_customer_id: customerId,
+      });
     }
 
     // Create checkout session

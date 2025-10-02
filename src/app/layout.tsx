@@ -4,7 +4,6 @@ import { inter, poppins } from '@/lib/fonts';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/toaster';
 import { UserProvider } from '@/contexts/UserContext';
-import { AuthProvider } from '@/contexts/AuthContext';
 
 export const metadata = {
   title: 'ClaimEase — Make your PIP claim easier',
@@ -44,12 +43,10 @@ export default function RootLayout({
         className={`${inter.className} ${poppins.variable} min-h-screen font-sans antialiased bg-background text-foreground`}
       >
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          <AuthProvider>
-            <UserProvider>
-              {children}
-              <Toaster />
-            </UserProvider>
-          </AuthProvider>
+          <UserProvider>
+            {children}
+            <Toaster />
+          </UserProvider>
         </ThemeProvider>
       </body>
     </html>
