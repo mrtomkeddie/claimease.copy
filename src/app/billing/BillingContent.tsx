@@ -7,14 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  CreditCard, 
-  Calendar, 
-  CheckCircle, 
-  AlertCircle,
-  ArrowUpCircle,
-  Settings
-} from 'lucide-react';
+import { CreditCard, Calendar, CircleCheck as CheckCircle, CircleAlert as AlertCircle, CircleArrowUp as ArrowUpCircle, Settings } from 'lucide-react';
 
 export function BillingContent() {
   const { user } = useUser();

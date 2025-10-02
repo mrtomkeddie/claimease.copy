@@ -8,16 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { 
-  User, 
-  CreditCard, 
-  Calendar, 
-  Settings, 
-  FileText, 
-  BarChart3,
-  TrendingUp,
-  Clock
-} from 'lucide-react';
+import { User, CreditCard, Calendar, Settings, FileText, ChartBar as BarChart3, TrendingUp, Clock } from 'lucide-react';
 
 export function DashboardContent() {
   const { user } = useUser();

@@ -6,7 +6,7 @@ import { useUser } from '@/contexts/UserContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { CircleCheck as CheckCircle, Loader as Loader2 } from 'lucide-react';
 import { ClaimEaseLogo } from '@/components/ClaimEaseLogo';
 
 interface Plan {

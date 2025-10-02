@@ -7,7 +7,7 @@ import { getUserProfile } from '@/lib/supabase-auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CreditCard, CheckCircle } from 'lucide-react';
+import { Loader as Loader2, CreditCard, CircleCheck as CheckCircle } from 'lucide-react';
 import { ClaimEaseLogo } from '@/components/ClaimEaseLogo';
 
 interface CheckoutSession {

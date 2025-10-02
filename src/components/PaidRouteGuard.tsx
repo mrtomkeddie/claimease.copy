@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/contexts/UserContext';
 import { checkUserPaidStatus } from '@/lib/supabase-auth';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader as Loader2, Lock } from 'lucide-react';
 
 interface PaidRouteGuardProps {
   children: React.ReactNode;
