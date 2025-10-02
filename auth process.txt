@@ -1,0 +1,1286 @@
+0) How the flow will work (high-level)
+
+User types email on the landing page (www) → Clicks Start my claim → full-page redirect to your App auth page with the email in the URL.
+
+App (app) runs an identifier-first auth screen:
+
+If email exists → show Password → Sign in
+
+If new email → show Create password → Create account
+
+After auth:
+
+If a plan was passed from landing → go straight to Stripe Checkout
+
+Else → show Choose plan then Stripe Checkout
+
+After Stripe success → back to app → Onboarding.
+
+Stripe webhook gives you the name (so you don’t need to ask it on the landing page).
+
+1) Landing Project (www.claimease.co.uk
+)
+A. Hero form (email-only)
+
+Page: / (Home)
+
+Component: Your hero card
+
+Fields:
+
+Email (required)
+
+Plan (optional, radio or buttons: standard | pro)
+
+Action on submit (button “Start my claim”)
+
+In Trae: Form → On Submit → Navigate to URL
+
+URL:
+
+https://app.claimease.co.uk/auth?email={{email}}&plan={{plan}}
+
+
+If you don’t have a plan selector on www, just omit &plan={{plan}}.
+
+What to expect:
+Clicking the CTA performs a full-page redirect to the app’s /auth page with the email prefilled via querystring. No cookies on www, so no CORS/cookie headaches.
+
+B. (Optional) Pricing page buttons
+
+If you have a Pricing page with “Get started” buttons:
+
+On click → Navigate to
+
+https://app.claimease.co.uk/auth?email={{captureFromModalOrBlank}}&plan=standard
+
+
+If you don’t capture an email on Pricing, still send them to /auth (the app will ask for email there).
+
+2) App Project (app.claimease.co.uk)
+A. Auth page (/auth) — Identifier-first UI
+
+Page setup
+
+Create page: /auth
+
+Layout:
+
+Block 1 — Email
+
+Input Email
+
+Button Continue
+
+Block 2 — Password (hidden by default)
+
+Input Password (+ “Show” toggle)
+
+Link Forgot password?
+
+Button Sign in
+
+Block 3 — Create Password (hidden by default)
+
+Input Create password
+
+Legal line: “By continuing, you agree to our Terms & Privacy Policy.”
+
+Button Create account
+
+Prefill email from URL
+
+On page load, set Email input value from URLSearchParams.email.
+
+Button: Continue (logic)
+
+On click:
+
+Try to sign in silently with email and a dummy password (or better: call “fetch sign-in methods for email” if your auth provider supports it).
+
+Branch:
+
+If user exists:
+
+Hide Create Password block
+
+Show Password block
+
+Focus Password input
+
+If user not found:
+
+Hide Password block
+
+Show Create Password block
+
+Focus Create Password input
+
+If Trae doesn’t have a “check user exists” helper:
+
+Option 1: Use your auth provider’s “fetch sign-in methods for email” (Firebase) or “admin get user by email” (server call).
+
+Option 2 (simplest): Show Password and Create Password blocks conditionally after the Continue button based on the API response when you attempt sign-in:
+
+If sign-in returns user-not-found → switch to Create Password block
+
+If sign-in returns wrong-password → stay on Password block with error
+
+If sign-in succeeds → proceed
+
+Button: Sign in
+
+Call Sign in with Email + Password.
+
+On success:
+
+If plan exists in URL or state → go to /checkout?plan={{plan}}
+
+Else → go to /plans
+
+Button: Create account
+
+Call Sign up with Email + Password (also send verification email in background).
+
+On success:
+
+Store plan from URL into state if present
+
+Navigate to /checkout?plan={{planOrDefault}} or /plans
+
+Forgot password
+
+Standard Send reset email action → show confirmation toast/text.
+
+B. Plans & Checkout
+
+If you show a Plans page (/plans):
+
+Each plan button → Navigate to /checkout?plan=standard|pro.
+
+Checkout page (/checkout)
+
+On load:
+
+Read plan from URLSearchParams.plan (fallback to standard).
+
+Create Stripe Checkout Session (server action or Trae connector):
+
+Parameters:
+
+price = your Stripe Price ID (based on plan)
+
+customer_email = current user’s email
+
+mode = payment (one-off) or subscription (if you ever switch)
+
+success_url = https://app.claimease.co.uk/onboarding?session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = https://app.claimease.co.uk/checkout?plan={{plan}}
+
+Redirect user to session.url.
+
+What to expect:
+Stripe collects name (and address if you enable it). You don’t need to ask it earlier.
+
+C. Post-payment onboarding (/onboarding)
+
+On load:
+
+Read session_id from URL.
+
+(Optional) Call your backend to retrieve Checkout Session → Customer.
+
+Upsert user profile with name from Stripe if you don’t already have it.
+
+Show “Finish setup” if anything is missing (e.g., address), otherwise Start claim.
+
+D. Auth Guard (protect app routes)
+
+Add route protection (Trae middleware/guards) for:
+/dashboard, /claim/*, /onboarding, /checkout.
+
+If not authenticated → redirect to /auth?email={{knownOrBlank}}.
+
+3) Stripe Dashboard (one-time settings)
+
+Products/Prices
+
+Create Standard (£49) and Pro (£79) prices (one-time).
+
+Checkout Settings
+
+Enable Collect customer name.
+
+(Optional) Enable Address if you need receipts with addresses.
+
+Webhooks
+
+Add endpoint: https://app.claimease.co.uk/api/stripe/webhook
+
+Events:
+
+checkout.session.completed
+
+(Optional) customer.updated, payment_intent.succeeded
+
+In your webhook handler:
+
+Fetch session.customer → get Customer (name, email)
+
+Upsert to your Users table and attach purchase/plan
+
+4) Cookies, CORS & domains (keep this simple)
+
+Because you redirect full-page from www to app for auth, only the app sets cookies. That’s ideal.
+
+Session cookies on the app should be:
+Secure; HttpOnly; SameSite=Lax; Path=/
+(Domain can be left as app.claimease.co.uk. You don’t need cross-subdomain cookies for this flow.)
+
+Do not try to set auth cookies from the landing project.
+
+5) Legal & GDPR (minimum)
+
+Under the hero CTA on www:
+“By continuing, you agree to our Terms and Privacy Policy.”
+
+On /auth when creating account: repeat the same line.
+
+Keep marketing emails opt-in (unchecked by default). Transactional emails (reset, receipts) are fine without opt-in.
+
+6) Copy to paste (fast)
+
+Hero CTA: Start my claim
+
+Auth title: Let’s get you in
+
+Continue button: Continue
+
+Password path title: Welcome back. Enter your password.
+
+Create password path title: Create a password to continue.
+
+Forgot link: Forgot password?
+
+Checkout CTA: Secure checkout
+
+Onboarding heading: You’re in. Let’s finish setup.
+
+7) QA checklist (run these tests)
+
+Landing → App
+
+ Typing my email on www sends me to https://app.../auth?email=… with Email prefilled.
+
+Identifier-first
+
+ Existing email → shows Password (errors show clearly for wrong password).
+
+ New email → shows Create password (legal line visible).
+
+Stripe
+
+ /checkout?plan=standard routes me to Stripe with correct price.
+
+ After paying, I return to /onboarding and I’m still logged in.
+
+ Webhook writes name + email to my user profile.
+
+Guards
+
+ Hitting /dashboard while logged out redirects to /auth.
+
+Emails
+
+ Password reset email arrives.
+
+ (Optional) Email verification works; block exports/uploads until verified.
+
+8) Troubleshooting (common gotchas)
+
+Password step never appears: Add the “check user exists” branch. If provider lacks it, branch based on sign-in error codes.
+
+After Stripe I’m logged out: Set session cookies with SameSite=Lax; Secure; HttpOnly. Avoid SameSite=Strict.
+
+Webhook not firing: Confirm the exact URL and events in Stripe; check logs in Stripe Dashboard → Developers → Webhooks.
+
+Plan not remembered: Pass plan as a query param from www or set a state variable on /auth before navigating to /checkout.
+
+PART 2
+
+Got you. We’ll keep two Trae projects (Landing = www, App = app) and wire them together using Firebase Auth (email/password) + optional Stripe. Below are click-by-click instructions for both projects plus the Firebase Console. Follow them in order.
+
+A) Firebase Console — one-time setup (10 mins)
+
+Enable Email/Password
+
+Go to Firebase Console → Build → Authentication → Sign-in method.
+
+Turn Email/Password = ON.
+
+(Leave magic link OFF.)
+
+Authorized domains (critical)
+
+Authentication → Settings → Authorized domains → Add domain:
+
+app.claimease.co.uk
+
+www.claimease.co.uk
+
+(Add your Trae preview domains too, e.g., *.trae.ai if you test there.)
+
+Email templates
+
+Authentication → Templates: customize Password reset and Verify email (you’ll use reset now; verify is optional).
+
+Firestore (if using it for profiles)
+
+Build → Firestore Database → Create database (if not already).
+
+Rules (paste, then Publish):
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}
+
+
+What to expect: Only a signed-in user can read/write their own user doc.
+
+B) Landing Project (Trae) — www.claimease.co.uk
+
+Goal: Capture email (and optional plan), then redirect to App with the email prefilled.
+
+Hero form (email-only)
+
+Component: your hero card.
+
+Fields:
+
+Email (required)
+
+Plan (optional: standard/pro radio or buttons)
+
+Button action
+
+Select the CTA button (e.g., “Start my claim”).
+
+On Click / On Submit → Navigate to URL.
+
+URL (with plan):
+
+https://app.claimease.co.uk/auth?email={{EmailInput.value}}&plan={{PlanValue}}
+
+
+URL (no plan selector on landing):
+
+https://app.claimease.co.uk/auth?email={{EmailInput.value}}
+
+
+What to expect
+
+After submit, the browser performs a full-page redirect to the App. No cookies set on www. Zero CORS/auth issues here.
+
+C) App Project (Trae) — app.claimease.co.uk
+
+We’ll build an identifier-first /auth page using Firebase Auth v9 (modular). This avoids the “Sign up vs Log in” fork and keeps friction low.
+
+1) Add Firebase to the App project
+
+In Trae, open your App project.
+
+Create a global script or module for Firebase (Trae → “Add Code” / “Global JS”).
+
+Paste your Firebase config from Project settings → Your apps → Web app.
+
+// /lib/firebase.js (or Trae's global code block)
+import { initializeApp } from "firebase/app";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+
+const firebaseConfig = {
+  apiKey: "…",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  appId: "…",
+  // (others as given)
+};
+
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+
+// Persist across reloads and Stripe redirects
+setPersistence(auth, browserLocalPersistence);
+
+
+What to expect: Auth state survives page reloads and Stripe redirects.
+
+2) Build the /auth page UI
+
+Create page /auth with three blocks (Password/Create shown conditionally):
+
+Block A (always visible):
+
+Email input (prefilled from URL)
+
+Continue button
+
+Block B (hidden initially):
+
+Password input (+ Show/Hide)
+
+Forgot password? link
+
+Sign in button
+
+Block C (hidden initially):
+
+Create password input
+
+Legal line: “By continuing, you agree to our Terms & Privacy Policy.”
+
+Create account button
+
+Prefill the email
+
+On page load, set EmailInput.value = URLSearchParams.get('email') || ''.
+
+Store plan = URLSearchParams.get('plan') || null in page/state.
+
+3) “Continue” button logic (check if user exists)
+
+Attach a Run JS action to the Continue button:
+
+import { fetchSignInMethodsForEmail } from "firebase/auth";
+import { auth } from "/lib/firebase"; // adjust path to your global code
+
+const email = EmailInput.value.trim();
+if (!email) {
+  toast.error("Please enter your email");
+  return;
+}
+
+try {
+  const methods = await fetchSignInMethodsForEmail(auth, email);
+  if (methods.length > 0 && methods.includes("password")) {
+    // Existing account → show Password block
+    Show(BlockB_Password);
+    Hide(BlockC_Create);
+    PasswordInput.focus();
+  } else {
+    // New account → show Create Password block
+    Hide(BlockB_Password);
+    Show(BlockC_Create);
+    CreatePasswordInput.focus();
+  }
+} catch (e) {
+  console.error(e);
+  toast.error("That email looks invalid. Please check and try again.");
+}
+
+
+What to expect:
+
+Existing user → Password block appears.
+
+New user → Create Password block appears.
+
+4) “Sign in” button logic
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "/lib/firebase";
+
+const email = EmailInput.value.trim();
+const pw = PasswordInput.value;
+
+try {
+  const { user } = await signInWithEmailAndPassword(auth, email, pw);
+  // Decide where to go next
+  if (plan) {
+    navigate(`/checkout?plan=${encodeURIComponent(plan)}`);
+  } else {
+    navigate("/plans"); // or /dashboard if you prefer
+  }
+} catch (e) {
+  if (e.code === "auth/wrong-password") {
+    toast.error("Wrong password. Try again or reset.");
+  } else if (e.code === "auth/user-not-found") {
+    // Edge case: show create flow
+    Hide(BlockB_Password);
+    Show(BlockC_Create);
+  } else {
+    console.error(e);
+    toast.error("Sign-in failed. Please try again.");
+  }
+}
+
+5) “Create account” button logic
+import { createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { auth } from "/lib/firebase";
+
+const email = EmailInput.value.trim();
+const pw = CreatePasswordInput.value;
+
+try {
+  const { user } = await createUserWithEmailAndPassword(auth, email, pw);
+  // Optional: verification (do not block flow on this)
+  try { await sendEmailVerification(user); } catch (_) {}
+
+  if (plan) {
+    navigate(`/checkout?plan=${encodeURIComponent(plan)}`);
+  } else {
+    navigate("/plans");
+  }
+} catch (e) {
+  if (e.code === "auth/email-already-in-use") {
+    // Switch them to login path
+    Show(BlockB_Password);
+    Hide(BlockC_Create);
+    toast.info("Email already exists. Please sign in.");
+  } else if (e.code === "auth/weak-password") {
+    toast.error("Please choose a longer password (8+ characters).");
+  } else {
+    console.error(e);
+    toast.error("Sign-up failed. Please try again.");
+  }
+}
+
+6) “Forgot password?” link
+import { sendPasswordResetEmail } from "firebase/auth";
+import { auth } from "/lib/firebase";
+
+const email = EmailInput.value.trim();
+if (!email) { toast.info("Enter your email first."); EmailInput.focus(); return; }
+
+try {
+  await sendPasswordResetEmail(auth, email);
+  toast.success("Password reset sent. Check your inbox.");
+} catch (e) {
+  toast.error("Could not send reset email. Double-check the address.");
+}
+
+7) Protect private routes
+
+In Trae, add a route guard (or page-level check) on:
+
+/dashboard, /claim/*, /onboarding, /checkout
+
+Guard logic: if auth.currentUser == null, redirect to /auth?email= (prefill if known).
+
+D) Stripe (optional but recommended for paid start)
+
+If you’re already set, keep your current setup. If not, here’s the minimal version.
+
+Create products/prices in Stripe (Standard £49, Pro £79).
+
+App → /checkout page:
+
+Read plan from URL.
+
+Click “Secure checkout” → call your backend to create a Checkout Session with:
+
+mode: 'payment'
+
+price based on plan
+
+customer_email = auth.currentUser.email
+
+success_url = https://app.claimease.co.uk/onboarding?session_id={CHECKOUT_SESSION_ID}
+
+cancel_url = https://app.claimease.co.uk/checkout?plan=${plan}
+
+Redirect to session.url.
+
+Webhook (/api/stripe/webhook):
+
+Listen for checkout.session.completed.
+
+Fetch session.customer → get Customer (name, email).
+
+Upsert Firestore: users/{uid} with name (you can map by email → uid using Admin SDK if needed).
+
+What to expect: Stripe collects the name for you; you don’t need it on landing.
+
+E) QA — run these tests end-to-end
+
+Landing → App
+
+Type an email on www → click CTA → lands on app/auth with Email prefilled.
+
+Identifier-first
+
+Existing email → Password block appears; wrong password shows a clear error; reset email works.
+
+New email → Create Password block appears; success goes to Plans/Checkout.
+
+Persistence
+
+After Stripe (or manual refresh), you’re still signed in on app (thanks to browserLocalPersistence).
+
+Guards
+
+Visiting a protected route when logged out redirects to /auth.
+
+Firestore
+
+Only the signed-in user can read/write their own users/{uid} doc (Rules test passes).
+
+F) Common gotchas (and fixes)
+
+“It says domain not allowed” on sign-in
+→ Add app.claimease.co.uk (and www) in Firebase Authorized domains.
+
+After Stripe I’m logged out
+→ Ensure you’re signing in on app and using browserLocalPersistence. Avoid moving auth to www.
+
+Password step doesn’t switch
+→ Ensure fetchSignInMethodsForEmail is called in Continue; branch on methods.includes('password').
+
+Reset emails not arriving
+→ Check the From address in Auth Templates and your domain’s SPF/DKIM (Hostinger). Use a neutral from-name like “ClaimEase”.
+
+stripe
+Stripe sits after account creation and before access. With your simplified “pre-reg on landing → sign up on app” flow, Stripe’s job is to:
+
+take payment, 2) give you the name (and receipt data), 3) flip the user’s paid=true entitlement via webhook.
+Below is the exact wiring for Trae (Landing + App), Firebase (Auth + Firestore), and Stripe.
+
+Zoom-out (the whole journey)
+
+Landing (www): write a pre_reg row in Firestore → redirect to app with ?email=….
+
+App (/auth): identifier-first.
+
+If email exists → Password (login).
+
+If new and pre_reg exists → Create password (sign-up) → store pendingPlan on the user.
+
+Checkout (/checkout): create a Stripe Checkout Session using user’s pendingPlan.
+
+Stripe webhook: on checkout.session.completed → mark users/{uid} as paid=true, set plan, paidAt, stripeCustomerId.
+
+Guards: all claim pages require paid===true.
+
+1) Stripe Dashboard (one-time setup)
+
+Products & Prices
+
+Create Product: ClaimEase Standard → Price (one-time) £49 → copy Price ID.
+
+Create Product: ClaimEase Pro → Price (one-time) £79 → copy Price ID.
+
+Branding & Checkout settings
+
+Settings → Branding: upload logo/colour.
+
+Checkout settings → Collect customer name = ON.
+
+API keys
+
+Developers → API keys: note Secret key (server only).
+
+Webhook
+
+Add endpoint: https://app.claimease.co.uk/api/stripe/webhook
+
+Events: checkout.session.completed
+
+Copy the Webhook Signing Secret.
+
+2) Firestore model (users + pre_reg)
+
+pre_reg/{sha256(email)}: { email, plan, createdAt, used } (you’ve got this).
+
+users/{uid}: at minimum
+
+{
+  "email": "...",
+  "pendingPlan": "standard" | "pro" | null,
+  "plan": "standard" | "pro" | null,
+  "paid": false,
+  "paidAt": null,
+  "stripeCustomerId": null
+}
+
+
+When to set pendingPlan:
+Right after successful sign-up (create password), read the user’s pre_reg and write pendingPlan to users/{uid}. That way /checkout knows what to charge even if there’s no URL param.
+
+3) App (/checkout) – create Checkout Session
+
+You must create the Checkout Session server-side (Stripe secret key). Use either Firebase Cloud Functions or your App’s server endpoint. Here’s a Firebase Functions example:
+
+3.1 Cloud Function: createCheckoutSession
+// functions/index.js
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const Stripe = require("stripe");
+
+admin.initializeApp();
+const db = admin.firestore();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY); // set in env
+
+// Map plan -> price IDs (set as env too, or Firestore config)
+const PRICE_STANDARD = process.env.PRICE_STANDARD; // price_123
+const PRICE_PRO = process.env.PRICE_PRO;           // price_456
+
+exports.createCheckoutSession = functions.https.onRequest(async (req, res) => {
+  // CORS for your app domain
+  const origin = req.headers.origin || "";
+  if (!/^https:\/\/app\.claimease\.co\.uk$/.test(origin)) return res.status(403).send("Forbidden");
+  res.set("Access-Control-Allow-Origin", origin);
+  res.set("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") return res.status(204).send();
+
+  try {
+    const { uid } = req.body; // client sends current user UID
+    if (!uid) return res.status(400).json({ error: "Missing uid" });
+
+    const userDoc = await db.collection("users").doc(uid).get();
+    if (!userDoc.exists) return res.status(404).json({ error: "User not found" });
+
+    const user = userDoc.data();
+    if (!user.email) return res.status(400).json({ error: "User email missing" });
+
+    // Decide price by pendingPlan (fallback to standard)
+    const plan = user.pendingPlan === "pro" ? "pro" : "standard";
+    const price = plan === "pro" ? PRICE_PRO : PRICE_STANDARD;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ price, quantity: 1 }],
+      customer_email: user.email,
+      client_reference_id: uid,            // lets webhook find the user quickly
+      metadata: { uid, plan },             // redundant but convenient
+      success_url: "https://app.claimease.co.uk/onboarding?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url:  "https://app.claimease.co.uk/checkout"
+    });
+
+    return res.json({ url: session.url });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: "Failed to create session" });
+  }
+});
+
+
+Trae wiring (on /checkout page):
+
+On load, guard: if paid!==true continue, else redirect to /dashboard.
+
+Button “Secure checkout” → Call HTTP (POST) to the function with { uid: auth.currentUser.uid }.
+
+On success → window.location.href = response.url.
+
+What to expect: User lands on Stripe, sees correct plan & amount, name collected.
+
+4) Webhook – flip paid=true after success
+4.1 Cloud Function: stripeWebhook
+exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  let event;
+  try {
+    event = require("stripe").webhooks.constructEvent(
+      req.rawBody,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook signature verification failed.", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const uid = session.client_reference_id; // we set this earlier
+    const plan = (session.metadata && session.metadata.plan) || "standard";
+
+    try {
+      // Optionally retrieve the customer to capture name
+      // const customer = await stripe.customers.retrieve(session.customer);
+      await admin.firestore().collection("users").doc(uid).set({
+        plan,
+        paid: true,
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        stripeCustomerId: session.customer || null,
+        // name: customer?.name || null,
+      }, { merge: true });
+    } catch (e) {
+      console.error("Failed to update user after checkout", e);
+      // You can alert yourself or retry via DLQ if needed
+    }
+  }
+
+  return res.json({ received: true });
+});
+
+
+Deploy & env vars
+
+firebase functions:config:set stripe.secret_key="sk_live_..." \
+  stripe.webhook_secret="whsec_..." \
+  prices.standard="price_..." \
+  prices.pro="price_..."
+
+
+(or use process.env via your hosting provider).
+
+What to expect: A few seconds after payment, the user’s Firestore doc reflects paid=true and plan.
+
+5) Guards (deny access until paid)
+
+Add this check on /dashboard, /claim/*, /export, /onboarding:
+
+import { auth } from "/lib/firebase";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+
+const db = getFirestore();
+const u = auth.currentUser;
+if (!u) { navigate(`/auth`); return; }
+
+const snap = await getDoc(doc(db, "users", u.uid));
+const prof = snap.exists() ? snap.data() : null;
+
+if (!prof?.paid) {
+  navigate("/checkout");   // or show a friendly paywall card
+  return;
+}
+// else render page
+
+
+What to expect:
+
+New accounts (unpaid) are always sent to Checkout.
+
+Returning paid users go straight to the app.
+
+6) Where the plan comes from (and upgrades)
+
+On sign-up, read the pre_reg doc to set users/{uid}.pendingPlan (standard or pro).
+
+/checkout charges pendingPlan.
+
+On success, webhook sets plan and paid=true, and you can clear pendingPlan.
+
+Upgrade later: Show an “Upgrade to Pro” button that sets pendingPlan='pro' then sends to /checkout again (another one-off payment).
+
+7) QA script you can run today
+
+New email → Landing pre-reg → App /auth → Create password → /checkout → Pay → back to /onboarding.
+
+In Firestore, users/{uid} shows paid=true, plan=standard|pro.
+
+Unpaid user hits /claim → redirected to /checkout.
+
+Paid user refreshes /dashboard → remains signed in and has access.
+
+Upgrade path: set pendingPlan='pro' → /checkout → webhook updates plan.
+
+TL;DR
+
+Stripe fits between sign-up and access.
+
+Use Checkout Session to take payment; webhook toggles paid in Firestore; guards enforce access.
+
+Plan selection comes from pre_reg → pendingPlan → Checkout → webhook finalizes plan.
+
+update
+
+0) Big picture (so we’re aligned)
+
+Landing (www): user selects plan + enters email → you call createCheckoutSession → redirect to Stripe.
+
+Stripe: user pays → Stripe redirects to https://app.claimease.co.uk/post-checkout?session_id=….
+
+App (/post-checkout): page calls getCheckoutEmail(session_id) → shows Create password with email locked → creates Firebase user → sends them to onboarding.
+
+Webhook: separately confirms payment and writes paid=true, plan to Firestore (idempotent).
+
+1) One-time setup (Stripe + Firebase)
+1.1 Stripe Dashboard
+
+Products → Add product
+
+Create ClaimEase Standard → Price £49 (one-time). Copy Price ID.
+
+Create ClaimEase Pro → Price £79 (one-time). Copy Price ID.
+
+Settings → Branding: upload logo/colour.
+
+Checkout settings: turn Collect customer name = ON.
+
+Developers → API Keys: note the Secret key (server only).
+
+Developers → Webhooks → Add endpoint
+
+URL: https://app.claimease.co.uk/api/stripe/webhook
+
+Events: checkout.session.completed
+
+Copy the Webhook Signing Secret.
+
+1.2 Firebase Console
+
+Authentication → Sign-in method: enable Email/Password.
+
+Authentication → Settings → Authorized domains
+
+Add www.claimease.co.uk and app.claimease.co.uk (plus Trae preview domains if used).
+
+Firestore → Create database (if not already).
+Create a users collection when your first user signs up.
+
+(Optional but recommended) App Check: enable for web apps later.
+
+2) Cloud Functions (3 endpoints)
+2.1 Create a Functions project (if not already)
+
+In your Firebase repo:
+
+firebase init functions
+# choose JavaScript or TypeScript; choose Node 18+
+
+
+Install deps
+
+cd functions
+npm i stripe cors jsonwebtoken
+
+2.2 Paste this functions/index.js
+// functions/index.js
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const Stripe = require("stripe");
+const cors = require("cors")({ origin: [/^https:\/\/www\.claimease\.co\.uk$/, /^https:\/\/app\.claimease\.co\.uk$/], credentials: true });
+
+admin.initializeApp();
+const db = admin.firestore();
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+// Map plan -> Stripe price id (set via env)
+const PRICE_STANDARD = process.env.PRICE_STANDARD; // e.g., price_123
+const PRICE_PRO      = process.env.PRICE_PRO;      // e.g., price_456
+
+// ---------- 1) Create Checkout Session (called from LANDING) ----------
+exports.createCheckoutSession = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method === "OPTIONS") return res.status(204).send();
+    if (req.method !== "POST")    return res.status(405).send("Method Not Allowed");
+
+    const { email, plan } = req.body || {};
+    if (!email || !["standard","pro"].includes(plan)) {
+      return res.status(400).json({ error: "Invalid email or plan" });
+    }
+
+    const price = plan === "pro" ? PRICE_PRO : PRICE_STANDARD;
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        line_items: [{ price, quantity: 1 }],
+        customer_email: email,                 // prefill/lock email on Stripe
+        metadata: { plan },                    // read later if needed
+        success_url: "https://app.claimease.co.uk/post-checkout?session_id={CHECKOUT_SESSION_ID}",
+        cancel_url:  "https://www.claimease.co.uk/?cancelled=1"
+      });
+      return res.json({ url: session.url });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to create session" });
+    }
+  });
+});
+
+// ---------- 2) Get Checkout Email (called from APP /post-checkout) ----------
+exports.getCheckoutEmail = functions.https.onRequest((req, res) => {
+  cors(req, res, async () => {
+    if (req.method === "OPTIONS") return res.status(204).send();
+    if (req.method !== "POST")    return res.status(405).send("Method Not Allowed");
+
+    const { session_id } = req.body || {};
+    if (!session_id) return res.status(400).json({ error: "Missing session_id" });
+
+    try {
+      const session = await stripe.checkout.sessions.retrieve(session_id);
+      // Ensure it was actually paid
+      if (session.payment_status !== "paid") {
+        return res.status(400).json({ error: "Payment not completed", status: session.payment_status });
+      }
+      const email = session.customer_details?.email || session.customer_email;
+      const plan  = session.metadata?.plan || "standard";
+      return res.json({ email, plan, status: session.payment_status, customerId: session.customer || null });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: "Failed to retrieve session" });
+    }
+  });
+});
+
+// ---------- 3) Stripe Webhook (server-to-server) ----------
+exports.stripeWebhook = functions.https.onRequest(async (req, res) => {
+  // IMPORTANT: In firebase.json add { "functions": { "httpOptions": { "raw": true }}} or
+  // set "stripeWebhook" to use raw body parsing to verify signature if needed.
+  const sig = req.headers["stripe-signature"];
+  let event;
+  try {
+    event = Stripe.webhooks.constructEvent(
+      req.rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.error("Webhook signature verification failed.", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const email = session.customer_details?.email || session.customer_email || null;
+    const plan  = session.metadata?.plan || "standard";
+
+    // Strategy: upsert a purchase record keyed by email; the app will attach it after account creation.
+    try {
+      await db.collection("purchases").doc(session.id).set({
+        email, plan,
+        paid: true,
+        paidAt: admin.firestore.FieldValue.serverTimestamp(),
+        stripeCustomerId: session.customer || null
+      }, { merge: true });
+    } catch (e) {
+      console.error("Failed to write purchase record", e);
+    }
+  }
+  return res.json({ received: true });
+});
+
+2.3 Set environment variables & deploy
+# From /functions
+export STRIPE_SECRET_KEY=sk_live_xxx
+export PRICE_STANDARD=price_xxx
+export PRICE_PRO=price_yyy
+export STRIPE_WEBHOOK_SECRET=whsec_xxx
+
+# For hosting providers that forward env to functions, configure accordingly.
+# On Firebase, use:
+firebase functions:config:set stripe.secret_key="sk_live_xxx" \
+  prices.standard="price_xxx" prices.pro="price_yyy" \
+  stripe.webhook_secret="whsec_xxx"
+# If you used functions:config, adjust code to read from functions.config() instead of process.env.
+
+firebase deploy --only functions
+
+
+What to expect: You now have 3 endpoints:
+
+createCheckoutSession
+
+getCheckoutEmail
+
+stripeWebhook
+
+3) Landing project (www) — send users to Stripe
+3.1 Hero form (email + plan)
+
+Fields:
+
+Email (required, type=email, autocomplete on)
+
+Plan (radio or toggle): standard / pro (required)
+
+3.2 Button action
+
+Where to click: Hero form → On Submit → Call HTTP
+
+Method: POST
+
+URL: your deployed createCheckoutSession function URL
+
+Headers: Content-Type: application/json
+
+Body (JSON):
+
+{ "email": "{{Email.value}}", "plan": "{{Plan.value}}" }
+
+
+On success: Navigate to URL → {{response.url}}
+
+On error: show toast “Checkout unavailable, please try again.”
+
+What to expect: Clicking the CTA jumps straight to Stripe Checkout (email prefilled). No trip to the app yet.
+
+4) App project (app) — create account after payment
+4.1 Firebase init (persistence)
+
+Where: App’s global code
+
+Do:
+
+import { initializeApp } from "firebase/app";
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
+
+const firebaseConfig = { /* your web config */ };
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
+
+setPersistence(auth, browserLocalPersistence); // survive redirects/refresh
+
+4.2 Add page: /post-checkout
+
+Layout
+
+Read-only Email (locked)
+
+Create password input (+ show/hide)
+
+CTA: Create my account
+
+Small note: “You’ve paid for {{plan}}. Finish by creating a password.”
+
+On page load (Run JS)
+
+Read session_id from URL.
+
+Call HTTP (POST) → getCheckoutEmail with { "session_id": "{{SessionId}}" }.
+
+On success, store {email, plan, customerId} in page state and set the Email field read-only.
+
+Create account (Run JS)
+
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "/lib/firebase";
+
+const email = State.email;           // from getCheckoutEmail response
+const plan  = State.plan || "standard";
+const pw    = PasswordInput.value;
+
+try {
+  const { user } = await createUserWithEmailAndPassword(auth, email, pw);
+
+  // Mark as paid. (Webhook will also write a purchase record; this is OK/idempotent.)
+  await setDoc(doc(db, "users", user.uid), {
+    email,
+    plan,
+    paid: true,
+    paidAt: serverTimestamp(),
+    stripeCustomerId: State.customerId || null
+  }, { merge: true });
+
+  navigate("/onboarding"); // or /dashboard
+} catch (e) {
+  if (e.code === "auth/email-already-in-use") {
+    // If they already had an account, send to /auth to sign in instead.
+    navigate(`/auth?email=${encodeURIComponent(email)}&from=post-checkout`);
+  } else if (e.code === "auth/weak-password") {
+    toast.error("Please choose a longer password (8+ characters).");
+  } else {
+    console.error(e);
+    toast.error("Could not create your account. Please try again.");
+  }
+}
+
+
+What to expect: After Stripe, the page shows the paid email locked; user sets a password; account is created and marked paid immediately.
+
+4.3 Guards (protect the app)
+
+Add a guard on /claim/*, /dashboard, /export, /onboarding:
+
+import { auth } from "/lib/firebase";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
+const db = getFirestore();
+
+const u = auth.currentUser;
+if (!u) { navigate("/auth"); return; }
+
+const snap = await getDoc(doc(db, "users", u.uid));
+const prof = snap.exists() ? snap.data() : null;
+
+if (!prof?.paid) {
+  navigate("/post-checkout"); // or /checkout if you keep a retry flow
+  return;
+}
+// render page
+
+
+What to expect: No one touches claims until paid=true.
+
+4.4 (Optional) /auth page
+
+Keep it only for returning users who already have an account.
+
+If a paid user logs in here, send them to /dashboard.
+
+If unpaid (rare in this flow), send them to /post-checkout.
+
+5) Connect the webhook to user account (optional tidy-up)
+
+Right now the webhook writes a purchases record. If you want to also attach payment to the user doc from the server:
+
+In webhook, after getting email, look up Firebase Auth user by email using Admin SDK:
+
+try {
+  const userRecord = await admin.auth().getUserByEmail(email);
+  await db.collection("users").doc(userRecord.uid).set({
+    plan, paid: true, paidAt: admin.firestore.FieldValue.serverTimestamp(),
+    stripeCustomerId: session.customer || null
+  }, { merge: true });
+} catch (e) {
+  // user might not exist yet (paid before creating password) -> that's OK.
+  // The client will set paid=true on /post-checkout anyway.
+}
+
+
+Expectation: Whether client or server writes first, the user ends with paid=true.
+
+6) Final QA (run these exactly)
+A. Happy path (new user)
+
+On www, pick Standard and enter a new email → Continue.
+
+On Stripe, email is prefilled. Pay.
+
+Redirect to /post-checkout → email is locked, plan shown.
+
+Enter password → land in /onboarding (or dashboard).
+
+Firestore: users/{uid} has { paid:true, plan:'standard' }.
+
+B. Existing account tries to pay again
+
+Use an email that already has an Auth account and is paid.
+
+After Stripe → /post-checkout → Create password should bounce to /auth?email=… (email already in use).
+
+C. Guards
+
+While logged out, open /claim/anything → redirected to /auth.
+
+Log in with unpaid user (simulate) → redirected to /post-checkout.
+
+D. Webhook
+
+Check Stripe → Developers → Webhooks logs: events delivering 200 OK.
+
+Firestore purchases contains a doc for each session.id.
+
+7) What to tell each Trae project
+
+Landing (www)
+
+“On submit, Call HTTP createCheckoutSession with {email, plan}.
+On success, navigate to the returned url.
+Do not call auth or set cookies here.”
+
+App (app)
+
+“Add page /post-checkout. On load, call getCheckoutEmail(session_id); lock the email field.
+On ‘Create account’, call createUserWithEmailAndPassword(emailFromServer, password), then upsert users/{uid} with { paid:true, plan } and go to /onboarding.
+Add route guards to require paid===true for claims/dashboard.”

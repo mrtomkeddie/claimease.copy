@@ -1,0 +1,527 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 14.3% 95.9%;
+    --foreground: 224 71.4% 4.1%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+    --primary: 180 45% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220 9.1% 43.1%;
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 8.9% 46.1%;
+    --accent: 157 44% 81%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 180 45% 52%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6.7%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 6.7%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 180 45% 30%; /* Original teal/cyan brand color */
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 240 4% 63%;
+    --accent: 157 44% 81%; /* Original light teal accent */
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 16.5%;
+    --input: 0 0% 10%;
+    --ring: 180 45% 30%;
+    --radius: 0.75rem;
+    --tertiary: 180 45% 20%; /* Original tertiary teal */
+    --tertiary-foreground: 0 0% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  
+  /* Apply Poppins font to all headings and titles */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', sans-serif;
+  }
+}
+
+/* Print-specific styles */
+@media print {
+  .page-break-after {
+    page-break-after: always;
+  }
+  .page-break-before {
+    page-break-before: always;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .printable-area {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 20px !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .print-section {
+    margin-bottom: 2rem;
+  }
+}
+
+/* Custom utility classes for ClaimEase brand */
+.text-accent {
+  color: hsl(var(--accent));
+}
+
+.text-tertiary {
+  color: hsl(var(--tertiary));
+}
+
+.text-success {
+  color: hsl(var(--success));
+}
+
+.text-warning {
+  color: hsl(var(--warning));
+}
+
+.bg-accent {
+  background-color: hsl(var(--accent));
+}
+
+.bg-tertiary {
+  background-color: hsl(var(--tertiary));
+}
+
+.bg-success {
+  background-color: hsl(var(--success));
+}
+
+.bg-warning {
+  background-color: hsl(var(--warning));
+}
+
+.border-accent {
+  border-color: hsl(var(--accent));
+}
+
+.border-tertiary {
+  border-color: hsl(var(--tertiary));
+}
+
+/* Web-optimized spacing */
+.web-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.mobile-spacing {
+  padding: 1rem;
+}
+
+@media (min-width: 768px) {
+  .mobile-spacing {
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .mobile-spacing {
+    padding: 2rem;
+  }
+}
+
+/* Better focus indicators for accessibility */
+@layer base {
+  *:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 2px;
+  }
+}
+
+/* Black theme optimized shadows */
+.card-shadow {
+  box-shadow: 
+    0 1px 3px 0 hsla(var(--primary), 0.2), 
+    0 1px 2px 0 hsla(var(--primary), 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.card-shadow-lg {
+  box-shadow: 
+    0 10px 15px -3px hsla(var(--primary), 0.3), 
+    0 4px 6px -2px hsla(var(--primary), 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Brand gradient backgrounds for black theme */
+.gradient-primary {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+}
+
+.gradient-accent {
+  background: linear-gradient(135deg, hsl(var(--accent)) 0%, hsl(var(--primary)) 100%);
+}
+
+.gradient-tertiary {
+  background: linear-gradient(135deg, hsl(var(--tertiary)) 0%, hsl(var(--primary)) 100%);
+}
+
+.gradient-brand {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 60%, hsl(var(--tertiary)) 100%);
+}
+
+/* Subtle but visible teal gradient in top-left corner */
+.gradient-dashboard {
+  background: 
+    radial-gradient(
+      ellipse 800px 600px at top left, 
+      hsla(var(--primary), 0.15) 0%, 
+      hsla(var(--primary), 0.08) 30%, 
+      transparent 60%
+    ),
+    hsl(var(--background));
+}
+
+/* Black background optimized gradients */
+.gradient-dark-primary {
+  background: linear-gradient(135deg, hsla(var(--primary), 0.15) 0%, hsla(var(--accent), 0.08) 100%);
+}
+
+.gradient-dark-accent {
+  background: linear-gradient(135deg, hsla(var(--accent), 0.15) 0%, hsla(var(--primary), 0.08) 100%);
+}
+
+.gradient-dark-brand {
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--secondary)) 50%, hsl(var(--tertiary)) 100%);
+}
+
+.gradient-dark-subtle {
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.1) 0%, hsl(var(--secondary) / 0.05) 100%);
+}
+
+.gradient-green-glow {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%);
+}
+
+.gradient-green-subtle {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(22, 163, 74, 0.05) 100%);
+}
+
+.gradient-green-accent {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+
+/* Enhanced hover effects for black theme */
+.hover-lift {
+  transition: all 0.2s ease-in-out;
+}
+
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 20px 25px -5px hsla(var(--primary), 0.4), 
+    0 10px 10px -5px hsla(var(--primary), 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Brand-specific button variants for black theme */
+.btn-brand {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-brand:hover {
+  background: color-mix(in srgb, hsl(var(--primary)) 85%, white);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 25px hsla(var(--primary), 0.4);
+}
+
+.btn-accent {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  border: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-accent:hover {
+  background: color-mix(in srgb, hsl(var(--accent)) 90%, white);
+  transform: translateY(-1px);
+}
+
+.btn-tertiary {
+  background: hsl(var(--tertiary));
+  color: hsl(var(--tertiary-foreground));
+  border: none;
+  transition: all 0.2s ease-in-out;
+}
+
+.btn-tertiary:hover {
+  background: color-mix(in srgb, hsl(var(--tertiary)) 85%, white);
+  transform: translateY(-1px);
+}
+
+/* Black theme specific enhancements */
+.glass-effect {
+  background: rgba(17, 17, 17, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid hsla(var(--primary), 0.2);
+}
+
+.glow-primary {
+  box-shadow: 0 0 30px hsla(var(--primary), 0.4);
+}
+
+.glow-accent {
+  box-shadow: 0 0 30px hsla(var(--accent), 0.4);
+}
+
+/* Improved contrast for black theme */
+.contrast-border {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.contrast-bg {
+  background: hsla(var(--primary), 0.08);
+}
+
+/* Web-specific layouts */
+.desktop-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .desktop-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+  }
+}
+
+.desktop-sidebar {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .desktop-sidebar {
+    display: block;
+    width: 300px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    background: hsl(var(--card));
+    border-right: hsl(var(--border));
+    padding: 2rem;
+  }
+  
+  .desktop-main {
+    margin-left: 300px;
+  }
+}
+
+/* Improved scrollbars for black theme */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary));
+}
+
+/* Text selection styling */
+::selection {
+  background: hsla(var(--primary), 0.3);
+  color: hsl(var(--foreground));
+}
+
+/* Enhanced focus styles for web accessibility */
+.focus-ring {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+}
+
+/* Card variations for better visual hierarchy */
+.card-elevated {
+  background: hsl(var(--card));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 4px 6px -1px rgba(0, 0, 0, 0.5),
+    0 2px 4px -1px rgba(0, 0, 0, 0.3),
+    0 0 0 1px hsla(var(--primary), 0.1);
+}
+
+.card-subtle {
+  background: rgba(17, 17, 17, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Animation styles removed - all elements now appear immediately */
+.fade-in,
+.fade-in-up,
+.stagger-container > * {
+  opacity: 1;
+  transform: none;
+}
+
+.animate-ready .fade-in.animate-in,
+.animate-ready .fade-in-up.animate-in,
+.animate-ready .stagger-container.animate-in > * {
+  opacity: 1;
+  transform: none;
+}
+
+/* Fixed smooth on-appear animations with proper initial states */
+@media (prefers-reduced-motion: no-preference) {
+  /* Ensure elements start hidden and animate in */
+  .animate-on-appear,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in {
+    opacity: 0;
+    will-change: opacity, transform;
+  }
+  
+  .animate-on-appear {
+    transform: translateY(20px);
+  }
+  
+  .animate-on-appear.animate-in {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .animate-fade-in {
+    /* Transition moved to .animate-in */
+  }
+  
+  .animate-fade-in.animate-in {
+    opacity: 1;
+    transition: opacity 500ms ease-out;
+  }
+  
+  .animate-slide-up {
+    transform: translateY(30px);
+    /* Transition moved to .animate-in */
+  }
+  
+  .animate-slide-up.animate-in {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .animate-scale-in {
+    transform: scale(0.95);
+    /* Transition moved to .animate-in */
+  }
+  
+  .animate-scale-in.animate-in {
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 500ms ease-out, 
+                transform 500ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  /* Stagger animations for grouped elements */
+  .animate-stagger > * {
+    opacity: 0;
+    transform: translateY(20px);
+    will-change: opacity, transform;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(1) {
+    transition-delay: 0ms;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(2) {
+    transition-delay: 100ms;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(3) {
+    transition-delay: 200ms;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(4) {
+    transition-delay: 300ms;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(5) {
+    transition-delay: 400ms;
+  }
+  
+  .animate-stagger.animate-in > *:nth-child(6) {
+    transition-delay: 500ms;
+  }
+  
+  .animate-stagger.animate-in > * {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 600ms cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 600ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  /* Clean up will-change after animations complete */
+  .animate-on-appear.animate-in,
+  .animate-fade-in.animate-in,
+  .animate-slide-up.animate-in,
+  .animate-scale-in.animate-in,
+  .animate-stagger.animate-in > * {
+    will-change: auto;
+  }
+}
+
+/* Reduced motion fallback - elements appear immediately */
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-appear,
+  .animate-fade-in,
+  .animate-slide-up,
+  .animate-scale-in,
+  .animate-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+    
